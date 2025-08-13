@@ -1,0 +1,23 @@
+:version = "2.1"
+num = 1
+char = 'c'
+array = [1, 2, "3", {
+    object = {
+        id = 12
+        version = version
+        # comment. paths that start with / are absolute, with ./ are relative, and ../ is parent directory.
+        path = /root/home/"weird directory()!? name$(version) with \" inline \\ escapes"/project
+    }, object2 = {id = 24, version = version, path = ./"main-tools"/$version/project} # $var for path inlines, $() for string interpolation
+}]
+
+object = {
+    :version = "$(version).3"
+    id = 42
+    version = version
+}
+
+# multline strings ignore and enforce empty first and last newlines (except for compressed mode, where they are not ignored)
+description = `
+multiline
+string
+`
