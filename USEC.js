@@ -7,7 +7,7 @@ class USEC {
     }
 
     static toString(object, { readable = false, enableVariables = false } = {}) {
-        if (object === undefined) throw new Error("Cannot stringify undefined object");
+        if (object === undefined) return (readable ? '' : '%') + "!";
         let parts = ["", ""];
         let string = this._toString(object, { readable, enableVariables, indentLevel: 0 });
         parts.push(string);
@@ -594,6 +594,7 @@ class USEC {
         parse() {
             if (this.current.type == "exclamation") {
                 this.next();
+                if (this.eof) return undefined;
                 return this.parseValue({});
             } return this.parseFile();
         }
