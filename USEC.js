@@ -42,7 +42,7 @@ class USEC {
 
         if (typeof object === 'string') {
             if (enableVariables) {
-                const regex = /^"\$:\$([a-zA-Z_][a-zA-Z0-9_]*)"$/;
+                const regex = /^\$\(\$([a-zA-Z_][a-zA-Z0-9_]*)\)$/;
                 const match = object.match(regex);
                 if (match) return match[1];
             }
@@ -640,7 +640,7 @@ class USEC {
                     break;
 
                 case "identifier":
-                    result = this.keepVariables ? `"$:$${this.parseVariable(variables)}"` : this.parseVariable(variables);
+                    result = this.keepVariables ? `$($${this.parseVariable(variables)})` : this.parseVariable(variables);
                     break;
 
                 case "array_open":
