@@ -17,6 +17,10 @@ class USEC {
         return parts.join("");
     }
 
+    static equals(obj1, obj2) {
+        return USEC.toString(obj1) === USEC.toString(obj2);
+    }
+
     static _toString(object, { readable = false, enableVariables = false, indentLevel = 0 } = {}) {
         const indent = readable ? '  '.repeat(indentLevel) : '';
         const prevIndent = readable ? '  '.repeat(Math.max(0, indentLevel - 1)) : '';
