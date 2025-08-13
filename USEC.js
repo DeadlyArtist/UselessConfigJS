@@ -1,14 +1,14 @@
 class USEC {
-    static parse(string, { pedantic = true, debugTokens = false, debugParser = false } = {}) {
+    static parse(string, { pedantic = true, keepVariables = false, debugTokens = false, debugParser = false } = {}) {
         let tokenizer = new this.Tokenizer(string, { pedantic, debug: debugTokens });
         tokenizer.tokenize();
         if (tokenizer.errors.length != 0) return null;
-        return new this.Parser(tokenizer.tokens, { pedantic, compact: tokenizer.compact, debug: debugParser }).parse();
+        return new this.Parser(tokenizer.tokens, { pedantic, keepVariables, compact: tokenizer.compact, debug: debugParser }).parse();
     }
 
-    static toString(object, { readable = false, disableVariables = false } = {}) {
+    static toString(object, { readable = false, enableVariables = false } = {}) {
         let parts = ["", ""];
-        let string = this._toString(object, { readable, disableVariables, indentLevel: 0 });
+        let string = this._toString(object, { readable, enableVariables, indentLevel: 0 });
         parts.push(string);
         if (!readable) parts[0] = "%";
         if (typeof string === 'object') parts[2] = string.value;
@@ -16,19 +16,19 @@ class USEC {
         return parts.join("");
     }
 
-    static _toString(object, { readable = false, disableVariables = false, indentLevel = 0 } = {}) {
+    static _toString(object, { readable = false, enableVariables = false, indentLevel = 0 } = {}) {
         const indent = readable ? '  '.repeat(indentLevel) : '';
         const newline = readable ? '\n' : ',';
         const maybeNewline = readable ? newline : "";
         const space = readable ? ' ' : '';
 
         const encodeString = (str) => {
-            return '"' + str
+            return str
                 .replace(/\\/g, '\\\\')
                 .replace(/"/g, '\\"')
                 .replace(/\n/g, '\\n')
                 .replace(/\r/g, '\\r')
-                .replace(/\t/g, '\\t') + '"';
+                .replace(/\t/g, '\\t');
         };
 
         if (object === undefined) return null;
@@ -41,17 +41,24 @@ class USEC {
         }
 
         if (typeof object === 'string') {
-            return encodeString(object);
+            if (enableVariables) {
+                const regex = /^"\$:\$([a-zA-Z_][a-zA-Z0-9_]*)"$/;
+                const match = object.match(regex);
+                if (match) return match[1];
+            }
+
+            let string = encodeString(object);
+            return '"' + string + '"';
         }
 
         if (object?.toJSON) {
-            return USEC._toString(object.toJSON(), { readable, disableVariables, indentLevel });
+            return USEC._toString(object.toJSON(), { readable, enableVariables, indentLevel });
         }
 
         if (Array.isArray(object)) {
             if (object.length === 0) return '[]';
             const items = object.map(item => {
-                item = USEC._toString(item, { readable, disableVariables, indentLevel: indentLevel + 1 });
+                item = USEC._toString(item, { readable, enableVariables, indentLevel: indentLevel + 1 });
                 if (item === null) return null;
                 return indent + (readable ? '  ' : '') + item;
             }).filter(item => item !== null);
@@ -66,13 +73,13 @@ class USEC {
             if (entries.length === 0) return '{}';
 
             const body = entries.map(([key, value]) => {
-                value = USEC._toString(value, { readable, disableVariables, indentLevel: indentLevel + 1 });
+                value = USEC._toString(value, { readable, enableVariables, indentLevel: indentLevel + 1 });
                 if (value === null) return null;
 
                 let outputKey = key;
                 let declaration = false;
 
-                if (!disableVariables) {
+                if (enableVariables) {
                     if (outputKey.startsWith('\\$')) {
                         outputKey = outputKey.slice(1); // remove escape backslash
                     } else if (outputKey.startsWith('\\\\')) {
@@ -86,7 +93,7 @@ class USEC {
                 // Validate outputKey for identifier usage
                 const isIdentifier = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(outputKey);
                 if (!isIdentifier && declaration) throw new Error("Invalid variable key: " + outputKey);
-                const encodedKey = isIdentifier ? outputKey : encodeString(outputKey);
+                const encodedKey = isIdentifier ? outputKey : `"${encodeString(outputKey)}"`;
                 const prefix = declaration ? ':' : '';
 
                 return indent + prefix + encodedKey + space + '=' + space + value;
@@ -499,9 +506,10 @@ class USEC {
         index = 0;
         indent = 0;
 
-        constructor(tokens, { pedantic = true, compact = false, debug = false } = {}) {
+        constructor(tokens, { pedantic = true, keepVariables = false, compact = false, debug = false } = {}) {
             this.tokens = tokens;
             this.pedantic = pedantic;
+            this.keepVariables = keepVariables;
             this.compact = compact;
             this.debug = debug;
         }
@@ -632,7 +640,7 @@ class USEC {
                     break;
 
                 case "identifier":
-                    result = this.parseVariable(variables);
+                    result = this.keepVariables ? `"$:$${this.parseVariable(variables)}"` : this.parseVariable(variables);
                     break;
 
                 case "array_open":
@@ -668,6 +676,7 @@ class USEC {
                 return null; // fallback
             }
 
+            if (this.keepVariables) return name;
             return variables[name]; // resolve directly
         }
 
@@ -684,7 +693,10 @@ class USEC {
                     this.next();
                 } else if (token.type === "interp_opener") {
                     this.next();
-                    if (this.expect("identifier")) result += this.parseVariable(variables);
+                    if (this.expect("identifier")) {
+                        if (this.keepVariables) result += `$(${this.parseVariable(variables)})`;
+                        else result += this.parseVariable(variables);
+                    }
                     if (!this.expect("interp_closer")) while (!this.check("interp_closer")) this.next();
                     this.next();
                 } else if (token.type === "string_end") {
@@ -715,7 +727,9 @@ class USEC {
                     parts.push(this.parseString(variables));
                 } else if (token.type === "dollar") {
                     this.next();
-                    if (this.expect("identifier")) parts.push(this.parseVariable(variables));
+                    if (this.expect("identifier")) {
+                        parts.push(this.keepVariables ? '$' + this.parseVariable(variables) : this.parseVariable(variables));
+                    }
                 } else if (token.type === "identifier") {
                     parts.push(token.value);
                     this.next();
@@ -765,6 +779,7 @@ class USEC {
                 if (stmt && stmt.key !== null) {
                     if (stmt.type == "declaration") {
                         variables[stmt.key] = stmt.value;
+                        if (this.keepVariables) obj["$" + stmt.key] = stmt.value;
                     } else if (stmt.type == "assignment") {
                         if (stmt.key in obj) this.error("Duplicate object key");
                         obj[stmt.key] = stmt.value;
@@ -796,6 +811,7 @@ class USEC {
                 if (stmt && stmt.key !== null) {
                     if (stmt.type == "declaration") {
                         variables[stmt.key] = stmt.value;
+                        if (this.keepVariables) obj["$" + stmt.key] = stmt.value;
                     } else if (stmt.type == "assignment") {
                         if (stmt.key in obj) this.error("Duplicate object key");
                         obj[stmt.key] = stmt.value;
