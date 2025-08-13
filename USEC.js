@@ -37,6 +37,37 @@ class USEC {
                 .replace(/\t/g, '\\t');
         };
 
+        if (object instanceof USEC.Format) {
+            const strParts = [];
+
+            if (readable) {
+                for (const el of object.before) {
+                    if (el.noIndent) {
+                        strParts.push(el.toString());
+                    } else {
+                        strParts.push(indent + el.toString());
+                    }
+                }
+            }
+
+            // Recursively stringify wrapped node
+            const main = USEC._toString(object.node, { readable, enableVariables, indentLevel });
+            if (readable) strParts.push(main);
+
+            if (readable) {
+                for (const el of object.after) {
+                    if (el.noIndent) {
+                        strParts.push(el.toString());
+                    } else {
+                        strParts.push(indent + el.toString());
+                    }
+                }
+            }
+
+            if (readable) return strParts.join(newline);
+            else return main; // compact mode ignores formatting
+        }
+
         if (object === undefined) return null;
         if (object === null) return 'null';
         if (object === true) return 'true';
@@ -110,6 +141,35 @@ class USEC {
 
         throw new Error(`Unsupported type: ${typeof object}`);
     }
+
+    static Format = class Format {
+        constructor(node, { before = [], after = [] } = {}) {
+            this.node = node;
+            this.before = before;
+            this.after = after;
+        }
+    };
+
+    static Newline = class Newline {
+        noIndent = true;
+        constructor(count = 1) {
+            this.count = count;
+        }
+
+        toString() {
+            return "\n".repeat(this.count);
+        }
+    };
+
+    static Comment = class Comment {
+        constructor(value = "") {
+            this.value = value;
+        }
+
+        toString() {
+            return `# ${this.value}`;
+        }
+    };
 
 
     static Tokenizer = class {
