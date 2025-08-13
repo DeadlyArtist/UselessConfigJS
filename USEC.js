@@ -7,6 +7,7 @@ class USEC {
     }
 
     static toString(object, { readable = false, enableVariables = false } = {}) {
+        if (object === undefined) throw new Error("Cannot stringify undefined object");
         let parts = ["", ""];
         let string = this._toString(object, { readable, enableVariables, indentLevel: 0 });
         parts.push(string);
@@ -18,6 +19,7 @@ class USEC {
 
     static _toString(object, { readable = false, enableVariables = false, indentLevel = 0 } = {}) {
         const indent = readable ? '  '.repeat(indentLevel) : '';
+        const prevIndent = readable ? '  '.repeat(Math.max(0, indentLevel - 1)) : '';
         const newline = readable ? '\n' : ',';
         const maybeNewline = readable ? newline : "";
         const space = readable ? ' ' : '';
@@ -60,12 +62,10 @@ class USEC {
             const items = object.map(item => {
                 item = USEC._toString(item, { readable, enableVariables, indentLevel: indentLevel + 1 });
                 if (item === null) return null;
-                return indent + (readable ? '  ' : '') + item;
+                return indent + item;
             }).filter(item => item !== null);
             if (items.length === 0) return '[]';
-            return '[' + maybeNewline +
-                items.join(newline) + maybeNewline +
-                indent + ']';
+            return '[' + maybeNewline + items.join(newline) + maybeNewline + prevIndent + ']';
         }
 
         if (typeof object === 'object') {
@@ -101,7 +101,7 @@ class USEC {
             if (body.length === 0) return '{}';
 
             if (indentLevel == 0) return { value: body.join(newline) };
-            return '{' + maybeNewline + body.join(newline) + maybeNewline + indent + '}';
+            return '{' + maybeNewline + body.join(newline) + maybeNewline + prevIndent + '}';
         }
 
         throw new Error(`Unsupported type: ${typeof object}`);
@@ -150,12 +150,13 @@ class USEC {
 
         tokenize() {
             this.init();
-            this.addNewline("sof");
+            this.addToken("newline", "sof");
+            let earlyEnd = this.eof;
             while (!this.eof) {
                 this.readStatement();
             }
-            if (this.lastToken?.type == "space" || this.lastToken?.type == "newline") this.tokens.pop();
-            this.addNewline("eof");
+            if (!earlyEnd && (this.lastToken?.type == "space" || this.lastToken?.type == "newline")) this.tokens.pop();
+            this.addToken("newline", "eof");
             if (this.openerStack.length != 0) {
                 for (let token of this.openerStack) this.error_token("Unclosed opener", token);
             }
@@ -503,7 +504,7 @@ class USEC {
 
     static Parser = class Parser {
         tokens = [];
-        index = 0;
+        index = 1; // start after sof
         indent = 0;
 
         constructor(tokens, { pedantic = true, keepVariables = false, compact = false, debug = false } = {}) {
@@ -619,9 +620,9 @@ class USEC {
                 case "keyword":
                     this.next();
                     switch (token.value) {
-                        case "true": result = true;
-                        case "false": result = false;
-                        case "null": result = null;
+                        case "true": result = true; break;
+                        case "false": result = false; break;
+                        case "null": result = null; break;
                         default: result = token.value;
                     }
                     break;
