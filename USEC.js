@@ -1,9 +1,9 @@
 class USEC {
-    static parse(string, { pedantic = true, keepVariables = false, debugTokens = false, debugParser = false } = {}) {
+    static parse(string, { pedantic = true, variables = null, keepVariables = false, debugTokens = false, debugParser = false } = {}) {
         let tokenizer = new this.Tokenizer(string, { pedantic, debug: debugTokens });
         tokenizer.tokenize();
         if (tokenizer.errors.length != 0) return null;
-        return new this.Parser(tokenizer.tokens, { pedantic, keepVariables, compact: tokenizer.compact, debug: debugParser }).parse();
+        return new this.Parser(tokenizer.tokens, { pedantic, variables, keepVariables, compact: tokenizer.compact, debug: debugParser }).parse();
     }
 
     static toString(object, { readable = false, enableVariables = false } = {}) {
@@ -571,12 +571,13 @@ class USEC {
         index = 1; // start after sof
         indent = 0;
 
-        constructor(tokens, { pedantic = true, keepVariables = false, compact = false, debug = false } = {}) {
+        constructor(tokens, { pedantic = true, variables = null, keepVariables = false, compact = false, debug = false } = {}) {
             this.tokens = tokens;
             this.pedantic = pedantic;
             this.keepVariables = keepVariables;
             this.compact = compact;
             this.debug = debug;
+            this.variables = variables ?? {};
         }
 
         get current() {
@@ -591,12 +592,13 @@ class USEC {
             return this.index + 1 >= this.tokens.length;
         }
 
-        parse() {
+        parse(variables) {
+            variables ??= this.variables;
             if (this.current.type == "exclamation") {
                 this.next();
                 if (this.eof) return undefined;
-                return this.parseValue({});
-            } return this.parseFile();
+                return this.parseValue(variables);
+            } return this.parseFile(variables);
         }
 
         next() {
@@ -832,9 +834,8 @@ class USEC {
             return array;
         }
 
-        parseFile() {
+        parseFile(variables) {
             const obj = {};
-            const variables = {};
 
             if (this.check("newline")) {
                 this.next();
