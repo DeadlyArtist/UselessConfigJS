@@ -5,7 +5,7 @@ array = [1, 2, "3", {
     object = {
         id = 12
         version = version
-        # comment. paths that start with / are absolute, with ./ are relative, and ../ is parent directory.
+        # comment
         path = "/root/home/weird directory()!? name$(version) with \" inline \\ \n escapes/$(version)/project" # $() for string interpolation
     }, object2 = {id = 24, version = version, path = "./main-tools/$(version)/project"}
 }]
@@ -17,7 +17,7 @@ multiline
 comment
 %%
 object = {
-    :version = "$(version).3" # variable override, but carries beyond scopes
+    :version = "$(version).3" # scoped variable override
     id = 42
     version = version
 }

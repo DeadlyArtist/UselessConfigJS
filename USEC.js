@@ -669,6 +669,7 @@ class USEC {
         }
 
         parse() {
+            this.variableStack = [this.variables];
             if (this.current.type == "exclamation") {
                 this.next();
                 if (this.eof) return undefined;
@@ -807,6 +808,15 @@ class USEC {
             this.next(); // consume identifier
 
             const name = token.value;
+            let variables = this.variables;
+            if (this.variableStack.length != 1) {
+                for (let i = this.variableStack.length - 1; i >= 1; i--) {
+                    if (name in this.variableStack[i]) {
+                        variables = this.variableStack[i];
+                        break;
+                    }
+                }
+            }
             if (!(name in variables)) {
                 this.error(`Undefined variable '${name}'`);
                 return null; // fallback
@@ -828,7 +838,7 @@ class USEC {
                     result += token.value;
                     this.next();
                 } else if (token.type === "identifier") {
-                    result = this.keepVariables ? `$(${this.parseVariable()})` : this.parseVariable();
+                    result += this.keepVariables ? `$(${this.parseVariable()})` : this.parseVariable();
                 } else if (token.type === "string_end") {
                     this.next();
                     break;
@@ -893,6 +903,7 @@ class USEC {
             this.next(); // consume brace_open
             const obj = {};
             this.indent += 2;
+            let localVariables = null;
 
             if (this.check("newline")) {
                 if (this.compact) this.error("Unnecessary newline");
@@ -905,7 +916,12 @@ class USEC {
                 if (this.debug) this.printNode(stmt, line, col);
                 if (stmt && stmt.key !== null) {
                     if (stmt.type == "declaration") {
-                        this.variables[stmt.key] = stmt.value;
+                        if (!localVariables) {
+                            localVariables = {};
+                            this.variableStack.push(localVariables);
+                        }
+
+                        localVariables[stmt.key] = stmt.value;
                         if (this.keepVariables) obj["$" + stmt.key] = stmt.value;
                     } else if (stmt.type == "assignment") {
                         if (stmt.key in obj) this.error("Duplicate object key");
@@ -918,6 +934,7 @@ class USEC {
                     this.next();
                 } else this.expect("brace_close");
             }
+            if (localVariables) this.variableStack.pop();
 
             this.next(); // consume brace_close
             return obj;
