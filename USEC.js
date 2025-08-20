@@ -509,7 +509,7 @@ class USEC {
             let dotSeen = false;
             let digitSeen = false;
 
-            if (this.current == "-" || this.current == "+") {
+            if (this.current == "-") {
                 this.next();
             }
 
