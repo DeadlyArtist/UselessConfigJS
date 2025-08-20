@@ -349,7 +349,7 @@ class USEC {
             const lo = this.lastOpener;
 
             if (this.isStartIdentifierChar(ch)) {
-                this.addToken(this.readIdentifierOrKeyword());
+                this.readIdentifierOrKeyword()
             } else if (ch === "#") {
                 if (this.compact) this.error("Comments are not allowed in compact mode");
                 this.readComment();
@@ -378,13 +378,13 @@ class USEC {
                 this.addCloser(this.makeToken("brace_close", ch));
                 this.next();
             } else if (ch === "'") {
-                this.addToken(this.readChar());
+                this.readChar()
             } else if (ch === '"') {
-                this.addString();
+                this.readString();
             } else if (ch === "`") {
-                this.addMultilineString();
+                this.readMultilineString();
             } else if (ch >= "0" && ch <= "9" || ch === "-") {
-                this.addToken(this.readNumber());
+                this.readNumber()
             } else if (ch === " ") {
                 if (lt && lt.type != "space" && lt.type != "newline") this.addToken(this.makeToken("space", ch));
                 else if (this.compact) this.error("Unnecessary space");
@@ -426,7 +426,7 @@ class USEC {
             }
         }
 
-        addInterpolation() {
+        readInterpolation() {
             // $(
             this.next();
             this.next();
@@ -445,13 +445,14 @@ class USEC {
 
         readIdentifierOrKeyword() {
             const start = this.index;
+            const startCol = this.col;
             while (!this.eof && this.isIdentifierChar(this.current)) {
                 this.next();
             }
 
             const value = this.string.slice(start, this.index);
             if (this.keywords.has(value)) return this.makeToken("keyword", value);
-            return this.makeToken("identifier", value);
+            this.addToken(this.makeToken("identifier", value, startCol));
         }
 
         readChar() {
@@ -479,10 +480,10 @@ class USEC {
                 this.error(`Character literal must be a single character`);
             }
 
-            return this.makeToken("char", value, startCol);
+            this.addToken(this.makeToken("char", value, startCol));
         }
 
-        addString() {
+        readString() {
             this.addOpener(this.makeToken("string_start", this.current));
             this.next();
 
@@ -504,7 +505,7 @@ class USEC {
                     break;
                 } else if (ch === "$" && this.peek() == "(") {
                     addStringPart();
-                    this.addInterpolation();
+                    this.readInterpolation();
                 } else if (ch === "\n") {
                     addStringPart();
                     this.error("Unclosed string");
@@ -528,7 +529,7 @@ class USEC {
             }
         }
 
-        addMultilineString() {
+        readMultilineString() {
             this.addOpener(this.makeToken("string_start", this.current));
             this.next();
 
@@ -552,7 +553,7 @@ class USEC {
                     break;
                 } else if (ch === "$" && this.peek() == "(") {
                     addStringPart();
-                    this.addInterpolation();
+                    this.readInterpolation();
                 } else if (ch === "\n" && this.peek() === "`") {
                     // skip adding the last newline
                     this.next();
@@ -605,7 +606,7 @@ class USEC {
                 this.error(`Invalid number: '${raw}'`);
             }
 
-            return this.makeToken("number", num, startCol);
+            this.addToken(this.makeToken("number", num, startCol));
         }
 
         escapeChar(ch) {
