@@ -17,7 +17,7 @@ multiline
 comment
 %%
 object = {
-    :version = "$(version).3"
+    :version = "$(version).3" # variable override, but carries beyond scopes
     id = 42
     version = version
 }

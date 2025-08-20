@@ -668,13 +668,12 @@ class USEC {
             return this.index + 1 >= this.tokens.length;
         }
 
-        parse(variables) {
-            variables ??= this.variables;
+        parse() {
             if (this.current.type == "exclamation") {
                 this.next();
                 if (this.eof) return undefined;
-                return this.parseValue(variables);
-            } return this.parseFile(variables);
+                return this.parseValue();
+            } return this.parseFile();
         }
 
         next() {
@@ -709,15 +708,15 @@ class USEC {
             return false;
         }
 
-        parseStatement(variables) {
+        parseStatement() {
             if (this.check("colon")) {
-                return this.parseDeclaration(variables);
+                return this.parseDeclaration();
             } else {
-                return this.parseAssignment(variables);
+                return this.parseAssignment();
             }
         }
 
-        parseDeclaration(variables) {
+        parseDeclaration() {
             this.next();
             if (!this.expect("identifier") && this.check("newline")) {
                 if (this.check("newline")) return null;
@@ -729,13 +728,13 @@ class USEC {
             if (this.cons_ret("equals")) return null;
             if (!this.compact) if (this.cons_ret("space")) return null;
 
-            let value = this.parseValue(variables);
+            let value = this.parseValue();
             if (value == null) return null;
 
             return { type: "declaration", key, value };
         }
 
-        parseAssignment(variables) {
+        parseAssignment() {
             if (!this.check("identifier") && !this.check("string_start")) {
                 this.error(`Expected assignment or declaration`);
                 if (this.check("newline")) return null;
@@ -747,13 +746,13 @@ class USEC {
             if (this.cons_ret("equals")) return null;
             if (!this.compact) if (this.cons_ret("space")) return null;
 
-            let value = this.parseValue(variables);
+            let value = this.parseValue();
             if (value == null) return null;
 
             return { type: "assignment", key, value };
         }
 
-        parseValue(variables) {
+        parseValue() {
             const token = this.current;
             const line = token.line;
             const col = token.col;
@@ -776,7 +775,7 @@ class USEC {
                     break;
 
                 case "string_start":
-                    result = this.parseString(variables);
+                    result = this.parseString();
                     break;
                 case "char":
                     this.next();
@@ -784,15 +783,15 @@ class USEC {
                     break;
 
                 case "identifier":
-                    result = this.keepVariables ? `$($${this.parseVariable(variables)})` : this.parseVariable(variables);
+                    result = this.keepVariables ? `$($${this.parseVariable()})` : this.parseVariable();
                     break;
 
                 case "array_open":
-                    result = this.parseArray(variables);
+                    result = this.parseArray();
                     break;
 
                 case "brace_open":
-                    result = this.parseObject(variables);
+                    result = this.parseObject();
                     break;
 
                 default:
@@ -803,7 +802,7 @@ class USEC {
             return result;
         }
 
-        parseVariable(variables) {
+        parseVariable() {
             const token = this.current;
             this.next(); // consume identifier
 
@@ -817,7 +816,7 @@ class USEC {
             return variables[name]; // resolve directly
         }
 
-        parseString(variables) {
+        parseString() {
             this.next(); // consume string_start
 
             let result = "";
@@ -829,8 +828,7 @@ class USEC {
                     result += token.value;
                     this.next();
                 } else if (token.type === "identifier") {
-                    if (this.keepVariables) result += `$(${this.parseVariable(variables)})`;
-                    else result += this.parseVariable(variables);
+                    result = this.keepVariables ? `$(${this.parseVariable()})` : this.parseVariable();
                 } else if (token.type === "string_end") {
                     this.next();
                     break;
@@ -843,7 +841,7 @@ class USEC {
             return result;
         }
 
-        parseArray(variables) {
+        parseArray() {
             this.next(); // consume array_open
             const array = [];
 
@@ -852,7 +850,7 @@ class USEC {
                 this.next();
             }
             while (!this.check("array_close")) { // no eof guaranteed by tokenizer
-                const value = this.parseValue(variables);
+                const value = this.parseValue();
                 array.push(value);
 
                 if (this.check("newline")) {
@@ -865,18 +863,18 @@ class USEC {
             return array;
         }
 
-        parseFile(variables) {
+        parseFile() {
             const obj = {};
 
             if (this.check("newline")) {
                 this.next();
             }
             while (!this.eof) {
-                const stmt = this.parseStatement(variables);
+                const stmt = this.parseStatement();
                 if (this.debug) console.log(`[Node]`, stmt);
                 if (stmt && stmt.key !== null) {
                     if (stmt.type == "declaration") {
-                        variables[stmt.key] = stmt.value;
+                        this.variables[stmt.key] = stmt.value;
                         if (this.keepVariables) obj["$" + stmt.key] = stmt.value;
                     } else if (stmt.type == "assignment") {
                         if (stmt.key in obj) this.error("Duplicate object key");
@@ -891,10 +889,9 @@ class USEC {
             return obj;
         }
 
-        parseObject(variables) {
+        parseObject() {
             this.next(); // consume brace_open
             const obj = {};
-            variables = { ...variables };
             this.indent += 2;
 
             if (this.check("newline")) {
@@ -904,11 +901,11 @@ class USEC {
             while (!this.check("brace_close")) { // no eof guaranteed by tokenizer
                 const line = this.current.line;
                 const col = this.current.col;
-                const stmt = this.parseStatement(variables);
+                const stmt = this.parseStatement();
                 if (this.debug) this.printNode(stmt, line, col);
                 if (stmt && stmt.key !== null) {
                     if (stmt.type == "declaration") {
-                        variables[stmt.key] = stmt.value;
+                        this.variables[stmt.key] = stmt.value;
                         if (this.keepVariables) obj["$" + stmt.key] = stmt.value;
                     } else if (stmt.type == "assignment") {
                         if (stmt.key in obj) this.error("Duplicate object key");
