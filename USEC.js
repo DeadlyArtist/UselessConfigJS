@@ -383,7 +383,7 @@ class USEC {
             } else if (ch === "`") {
                 this.addOpener(this.makeToken("string_start", ch));
                 this.next();
-            } else if (ch >= "0" && ch <= "9" || ch === "-" || ch === "+") {
+            } else if (ch >= "0" && ch <= "9" || ch === "-") {
                 this.addToken(this.readNumber());
             } else if (ch === " ") {
                 if (lt && lt.type != "space" && lt.type != "newline") this.addToken(this.makeToken("space", ch));
