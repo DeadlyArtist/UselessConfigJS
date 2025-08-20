@@ -480,6 +480,8 @@ class USEC {
             const startCol = this.col;
             let str = "";
 
+            if (this.string[this.index - 1] == "`" && this.current == "\n") this.next();
+
             while (!this.eof) {
                 const ch = this.current;
 
@@ -490,15 +492,14 @@ class USEC {
                     str += this.escapeChar(this.current);
                 } else if (ch === "$" && this.peek() == "(") {
                     break;
+                } else if (ch === "\n" && this.peek() === "`") {
+                    // skip adding the last newline
                 } else {
                     str += ch;
                 }
 
                 this.next();
             }
-
-            // Normalize leading/trailing newlines
-            if (!this.compact) str = str.replace(/^\s*\n/, "").replace(/\n\s*$/, "");
 
             return this.makeToken("string", str, startCol);
         }
