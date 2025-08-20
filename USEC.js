@@ -21,51 +21,32 @@ class USEC {
         return USEC.toString(obj1) === USEC.toString(obj2);
     }
 
+    static _getIndent(indentLevel, readable) {
+        return readable ? '  '.repeat(indentLevel) : '';
+    }
+
+    static _getPrevIndent(indentLevel, readable) {
+        return this._getIndent(Math.max(0, indentLevel - 1), readable);
+    }
+
+    static _string_toString(object, multiline = false) {
+        let string = object.replace(/\\/g, '\\\\')
+            .replace(/"/g, '\\"')
+            .replace(/\r/g, '\\r')
+            .replace(/\t/g, '\\t');
+        if (!multiline) string = string.replace(/\n/g, '\\n');
+        return multiline ? ('"' + string + '"') : ('`' + string + '`');
+    }
+
     static _toString(object, { readable = false, enableVariables = false, indentLevel = 0 } = {}) {
-        const indent = readable ? '  '.repeat(indentLevel) : '';
-        const prevIndent = readable ? '  '.repeat(Math.max(0, indentLevel - 1)) : '';
+        const indent = this._getIndent(indentLevel, readable);
+        const prevIndent = this._getPrevIndent(indentLevel, readable);
         const newline = readable ? '\n' : ',';
         const maybeNewline = readable ? newline : "";
         const space = readable ? ' ' : '';
 
-        const encodeString = (str) => {
-            return str
-                .replace(/\\/g, '\\\\')
-                .replace(/"/g, '\\"')
-                .replace(/\n/g, '\\n')
-                .replace(/\r/g, '\\r')
-                .replace(/\t/g, '\\t');
-        };
-
         if (object instanceof USEC.Format) {
-            const strParts = [];
 
-            if (readable) {
-                for (const el of object.before) {
-                    if (el.noIndent) {
-                        strParts.push(el.toString());
-                    } else {
-                        strParts.push(indent + el.toString());
-                    }
-                }
-            }
-
-            // Recursively stringify wrapped node
-            const main = USEC._toString(object.node, { readable, enableVariables, indentLevel });
-            if (readable) strParts.push(main);
-
-            if (readable) {
-                for (const el of object.after) {
-                    if (el.noIndent) {
-                        strParts.push(el.toString());
-                    } else {
-                        strParts.push(indent + el.toString());
-                    }
-                }
-            }
-
-            if (readable) return strParts.join(newline);
-            else return main; // compact mode ignores formatting
         }
 
         if (object === undefined) return null;
@@ -83,9 +64,11 @@ class USEC {
                 const match = object.match(regex);
                 if (match) return match[1];
             }
+            return this._string_toString(object);
+        }
 
-            let string = encodeString(object);
-            return '"' + string + '"';
+        if (object?.toUSECString) {
+            return (object.noIndent ? '' : indent) + object.toUSECString({ readable, enableVariables, indentLevel });
         }
 
         if (object?.toJSON) {
@@ -128,7 +111,7 @@ class USEC {
                 // Validate outputKey for identifier usage
                 const isIdentifier = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(outputKey);
                 if (!isIdentifier && declaration) throw new Error("Invalid variable key: " + outputKey);
-                const encodedKey = isIdentifier ? outputKey : `"${encodeString(outputKey)}"`;
+                const encodedKey = isIdentifier ? outputKey : `"${this._string_toString(outputKey)}"`;
                 const prefix = declaration ? ':' : '';
 
                 return indent + prefix + encodedKey + space + '=' + space + value;
@@ -148,6 +131,33 @@ class USEC {
             this.before = before;
             this.after = after;
         }
+
+        toUSECString({ readable = false, enableVariables = false, indentLevel = 0 } = {}) {
+            const main = USEC._toString(object.node, { readable, enableVariables, indentLevel });
+            if (!readable) return main;
+
+            const strParts = [];
+
+            for (const el of object.before) {
+                if (el.noIndent) {
+                    strParts.push(USEC.toString(el, { readable, enableVariables, indentLevel }));
+                } else {
+                    strParts.push(indent + USEC.toString(el, { readable, enableVariables, indentLevel }));
+                }
+            }
+
+            strParts.push(main);
+
+            for (const el of object.after) {
+                if (el.noIndent) {
+                    strParts.push(USEC.toString(el, { readable, enableVariables, indentLevel }));
+                } else {
+                    strParts.push(indent + USEC.toString(el, { readable, enableVariables, indentLevel }));
+                }
+            }
+
+            return strParts.join(newline);
+        }
     };
 
     static Newline = class Newline {
@@ -156,8 +166,8 @@ class USEC {
             this.count = count;
         }
 
-        toString() {
-            return "\n".repeat(this.count);
+        toUSECString(options) {
+            return "\n";
         }
     };
 
@@ -166,8 +176,28 @@ class USEC {
             this.value = value;
         }
 
-        toString() {
+        toUSECString(options) {
             return `# ${this.value}`;
+        }
+    };
+
+    static MultilineComment = class MultilineComment {
+        constructor(value = "") {
+            this.value = value;
+        }
+
+        toUSECString(options) {
+            return `%%\n${this.value}\n%%`;
+        }
+    };
+
+    static MultilineString = class MultilineString {
+        constructor(value = "") {
+            this.value = value;
+        }
+
+        toUSECString(options) {
+            return USEC._string_toString(this, true);
         }
     };
 
@@ -208,19 +238,19 @@ class USEC {
         init() {
             if (this.string.startsWith("%")) {
                 this.compact = true;
-                this.index++;
+                this.next();
             }
         }
 
         tokenize() {
             this.init();
-            this.addToken("newline", "sof");
+            this.addToken(this.makeToken("newline", "sof"));
             let earlyEnd = this.eof;
             while (!this.eof) {
                 this.readStatement();
             }
             if (!earlyEnd && (this.lastToken?.type == "space" || this.lastToken?.type == "newline")) this.tokens.pop();
-            this.addToken("newline", "eof");
+            this.addToken(this.makeToken("newline", "eof"));
             if (this.openerStack.length != 0) {
                 for (let token of this.openerStack) this.error_token("Unclosed opener", token);
             }
@@ -228,11 +258,12 @@ class USEC {
         }
 
         // === Token helpers ===
-        makeToken(type, value, col = undefined) {
+        makeToken(type, value, col = undefined, line = undefined) {
             return {
                 type,
                 value,
-                pos: { line: this.line, col: col ?? this.col },
+                line: line ?? this.line,
+                col: col ?? this.col,
             };
         }
 
@@ -276,7 +307,8 @@ class USEC {
 
         addCloser(token) {
             this.addToken(token);
-            if (this.openerStack.length != 0 && this.openerStack[this.openerStack.length - 1].value == this.getInverted(token.value)) {
+            const lo = this.lastOpener;
+            if (lo && lo.value == this.getInverted(token.value)) {
                 this.openerStack.pop();
             } else this.error_token("Unopened closer", token);
         }
@@ -316,29 +348,14 @@ class USEC {
             const lt = this.lastToken;
             const lo = this.lastOpener;
 
-            if (lo && lo.value === "\"") {
-                if (ch === '"') {
-                    this.addCloser(this.makeToken("string_end", ch));
-                    this.next();
-                } else if (ch === "$" && pk === "(") {
-                    this.addOpener(this.makeToken("interp_opener", ch + pk));
-                    this.next();
-                    this.next();
-                } else this.addToken(this.readString());
-            } else if (lo && lo.value === "`") {
-                if (ch === "`") {
-                    this.addCloser(this.makeToken("string_end", ch));
-                    this.next();
-                } else if (ch === "$" && pk === "(") {
-                    this.addOpener(this.makeToken("interp_opener", ch + pk));
-                    this.next();
-                    this.next();
-                } else this.addToken(this.readMultilineString());
-            } else if (this.isStartIdentifierChar(ch)) {
+            if (this.isStartIdentifierChar(ch)) {
                 this.addToken(this.readIdentifierOrKeyword());
             } else if (ch === "#") {
                 if (this.compact) this.error("Comments are not allowed in compact mode");
                 this.readComment();
+            } else if (ch === "%" && pk === "%") {
+                if (this.compact) this.error("Comments are not allowed in compact mode");
+                this.readMultilineComment();
             } else if (ch === "!") {
                 this.addToken(this.makeToken("exclamation", ch));
                 this.next();
@@ -347,21 +364,6 @@ class USEC {
                 this.next();
             } else if (ch === "=") {
                 this.addToken(this.makeToken("equals", ch));
-                this.next();
-            } else if (ch === "/") {
-                this.addToken(this.makeToken("path", ch));
-                this.next();
-            } else if (ch === ".") {
-                this.addToken(this.makeToken("dot", ch));
-                this.next();
-            } else if (ch === "~") {
-                this.addToken(this.makeToken("wave", ch));
-                this.next();
-            } else if (ch === "$") {
-                this.addToken(this.makeToken("dollar", ch));
-                this.next();
-            } else if (ch === ")") {
-                this.addCloser(this.makeToken("interp_closer", ch));
                 this.next();
             } else if (ch === "[") {
                 this.addOpener(this.makeToken("array_open", ch));
@@ -378,11 +380,9 @@ class USEC {
             } else if (ch === "'") {
                 this.addToken(this.readChar());
             } else if (ch === '"') {
-                this.addOpener(this.makeToken("string_start", ch));
-                this.next();
+                this.addString();
             } else if (ch === "`") {
-                this.addOpener(this.makeToken("string_start", ch));
-                this.next();
+                this.addMultilineString();
             } else if (ch >= "0" && ch <= "9" || ch === "-") {
                 this.addToken(this.readNumber());
             } else if (ch === " ") {
@@ -410,6 +410,36 @@ class USEC {
         readComment() {
             while (!this.eof && this.current !== "\n") {
                 this.next();
+            }
+        }
+
+        readMultilineComment() {
+            this.next();
+            this.next();
+            while (!this.eof) {
+                if (this.current === "%" && this.peek() === "%") {
+                    this.next();
+                    this.next();
+                    break;
+                }
+                this.next();
+            }
+        }
+
+        addInterpolation() {
+            // $(
+            this.next();
+            this.next();
+            const start = this.index;
+            const startCol = this.col;
+            while (!this.eof && this.isIdentifierChar(this.current)) {
+                this.next();
+            }
+            if (this.current === ")") {
+                this.addToken(this.makeToken("identifier", this.string.slice(start, this.index), startCol));
+                this.next();
+            } else {
+                this.error("Invalid interpolation character");
             }
         }
 
@@ -452,33 +482,63 @@ class USEC {
             return this.makeToken("char", value, startCol);
         }
 
-        readString() {
-            const quoteStartCol = this.col;
+        addString() {
+            this.addOpener(this.makeToken("string_start", this.current));
+            this.next();
+
+            let startCol = this.col;
+            let startLine = this.line;
             let str = "";
+            const addStringPart = () => {
+                if (str.length === 0) return;
+                this.addToken(this.makeToken("string", str, startCol, startLine));
+            }
 
             while (!this.eof) {
                 const ch = this.current;
 
                 if (ch === '"') {
+                    addStringPart();
+                    this.addCloser(this.makeToken("string_end", ch));
+                    this.next();
+                    break;
+                } else if (ch === "$" && this.peek() == "(") {
+                    addStringPart();
+                    this.addInterpolation();
+                } else if (ch === "\n") {
+                    addStringPart();
+                    this.error("Unclosed string");
+                    this.openerStack.pop();
+                    this.next();
                     break;
                 } else if (ch === "\\") {
                     this.next();
                     str += this.escapeChar(this.current);
-                } else if (ch === "$" && this.peek() == "(") {
-                    break;
+                    this.next();
+                    continue;
                 } else {
                     str += ch;
+                    this.next();
+                    continue;
                 }
 
-                this.next();
+                str = "";
+                startCol = this.col;
+                startLine = this.line;
             }
-
-            return this.makeToken("string", str, quoteStartCol);
         }
 
-        readMultilineString() {
-            const startCol = this.col;
+        addMultilineString() {
+            this.addOpener(this.makeToken("string_start", this.current));
+            this.next();
+
+            let startCol = this.col;
+            let startLine = this.line;
             let str = "";
+            const addStringPart = () => {
+                if (str.length === 0) return;
+                this.addToken(this.makeToken("string", str, startCol, startLine));
+            }
 
             if (this.string[this.index - 1] == "`" && this.current == "\n") this.next();
 
@@ -486,22 +546,32 @@ class USEC {
                 const ch = this.current;
 
                 if (ch === "`") {
+                    addStringPart();
+                    this.addCloser(this.makeToken("string_end", ch));
+                    this.next();
                     break;
+                } else if (ch === "$" && this.peek() == "(") {
+                    addStringPart();
+                    this.addInterpolation();
+                } else if (ch === "\n" && this.peek() === "`") {
+                    // skip adding the last newline
+                    this.next();
+                    continue;
                 } else if (ch === "\\") {
                     this.next();
                     str += this.escapeChar(this.current);
-                } else if (ch === "$" && this.peek() == "(") {
-                    break;
-                } else if (ch === "\n" && this.peek() === "`") {
-                    // skip adding the last newline
+                    this.next();
+                    continue;
                 } else {
                     str += ch;
+                    this.next();
+                    continue;
                 }
 
-                this.next();
+                str = "";
+                startCol = this.col;
+                startLine = this.line;
             }
-
-            return this.makeToken("string", str, startCol);
         }
 
         readNumber() {
@@ -551,7 +621,7 @@ class USEC {
         }
 
         printToken(token) {
-            console.log(`${token.line}:${token.col} [${node.type}]`, node.value.replace('\n', "\\n").replace('\r\n', "\\r\\n").replace('\t', "\\t"));
+            console.log(`${token.line}:${token.col} [${token.type}]`, typeof token.value == "string" ? token.value.replace('\n', "\\n").replace('\r\n', "\\r\\n").replace('\t', "\\t") : token.value);
         }
 
         error(message) {
@@ -720,13 +790,6 @@ class USEC {
                     result = this.parseObject(variables);
                     break;
 
-                case "dot":
-                case "wave":
-                case "dollar":
-                case "path":
-                    result = this.parsePath(variables);
-                    break;
-
                 default:
                     this.error(`Unexpected value token: ${token.type}`);
             }
@@ -760,14 +823,9 @@ class USEC {
                 if (token.type === "string") {
                     result += token.value;
                     this.next();
-                } else if (token.type === "interp_opener") {
-                    this.next();
-                    if (this.expect("identifier")) {
-                        if (this.keepVariables) result += `$(${this.parseVariable(variables)})`;
-                        else result += this.parseVariable(variables);
-                    }
-                    if (!this.expect("interp_closer")) while (!this.check("interp_closer")) this.next();
-                    this.next();
+                } else if (token.type === "identifier") {
+                    if (this.keepVariables) result += `$(${this.parseVariable(variables)})`;
+                    else result += this.parseVariable(variables);
                 } else if (token.type === "string_end") {
                     this.next();
                     break;
@@ -778,39 +836,6 @@ class USEC {
             }
 
             return result;
-        }
-
-        parsePath(variables) {
-            const parts = [];
-
-            const token = this.current;
-            if (token.type === "dot" || token.type === "wave" || token.type === "path") {
-                parts.push(token.value);
-                this.next();
-            }
-
-            while (!this.eof) {
-                const token = this.current;
-
-                if (token.type === "string_start") {
-                    parts.push(this.parseString(variables));
-                } else if (token.type === "dollar") {
-                    this.next();
-                    if (this.expect("identifier")) {
-                        parts.push(this.keepVariables ? '$' + this.parseVariable(variables) : this.parseVariable(variables));
-                    }
-                } else if (token.type === "identifier") {
-                    parts.push(token.value);
-                    this.next();
-                } else if (token.type === "dot" || token.type === "path") {
-                    parts.push(token.value);
-                    this.next();
-                } else {
-                    break; // end of path sequence
-                }
-            }
-
-            return parts.join("");
         }
 
         parseArray(variables) {
@@ -902,7 +927,7 @@ class USEC {
 
         error(msg) {
             const token = this.current;
-            const where = token?.pos ? ` [Line ${token.pos.line}, Col ${token.pos.col}]` : "";
+            const where = ` [Line ${token.line}, Col ${token.col}]`;
             const err = new Error(`${msg}${where}`);
             if (this.pedantic) throw err;
             else console.warn(err.message);

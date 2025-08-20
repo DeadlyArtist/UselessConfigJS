@@ -6,18 +6,25 @@ array = [1, 2, "3", {
         id = 12
         version = version
         # comment. paths that start with / are absolute, with ./ are relative, and ../ is parent directory.
-        path = /root/home/"weird directory()!? name$(version) with \" inline \\ \n escapes"/$version/project
-    }, object2 = {id = 24, version = version, path = ./"main-tools"/$version/project} # $var for path inlines, $() for string interpolation
+        path = "/root/home/weird directory()!? name$(version) with \" inline \\ \n escapes/$(version)/project" # $() for string interpolation
+    }, object2 = {id = 24, version = version, path = "./main-tools/$(version)/project"}
 }]
 
+%%
+super long
+descriptive
+multiline
+comment
+%%
 object = {
     :version = "$(version).3"
     id = 42
     version = version
 }
 
-# multline strings ignore and enforce empty first and last newlines (except for compressed mode, where they are not ignored)
+# multline strings ignore empty first and last newlines
 description = `
 multiline
 string
+with $(version) interpolation
 `
