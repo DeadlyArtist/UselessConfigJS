@@ -489,7 +489,7 @@ class USEC {
         }
 
         readString() {
-            this.addOpener(this.makeToken("string_start", this.current));
+            this.addToken(this.makeToken("string_start", this.current));
             this.next();
 
             let startCol = this.col;
@@ -505,7 +505,7 @@ class USEC {
 
                 if (ch === '"') {
                     addStringPart();
-                    this.addCloser(this.makeToken("string_end", ch));
+                    this.addToken(this.makeToken("string_end", ch));
                     this.next();
                     break;
                 } else if (ch === "$" && this.peek() == "(") {
@@ -514,7 +514,6 @@ class USEC {
                 } else if (ch === "\n") {
                     addStringPart();
                     this.error("Unclosed string");
-                    this.openerStack.pop();
                     this.next();
                     break;
                 } else if (ch === "\\") {
@@ -535,7 +534,7 @@ class USEC {
         }
 
         readMultilineString() {
-            this.addOpener(this.makeToken("string_start", this.current));
+            this.addToken(this.makeToken("string_start", this.current));
             this.next();
 
             let startCol = this.col;
@@ -553,7 +552,7 @@ class USEC {
 
                 if (ch === "`") {
                     addStringPart();
-                    this.addCloser(this.makeToken("string_end", ch));
+                    this.addToken(this.makeToken("string_end", ch));
                     this.next();
                     break;
                 } else if (ch === "$" && this.peek() == "(") {
