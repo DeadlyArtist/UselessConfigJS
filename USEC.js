@@ -33,8 +33,8 @@ class USEC {
         let string = object.replace(/\\/g, '\\\\')
             .replace(/"/g, '\\"')
             .replace(/\r/g, '\\r')
-            .replace(/\t/g, '\\t');
-        string = string.replace(/\n/g, '\\n');
+            .replace(/\t/g, '\\t')
+            .replace(/\n/g, '\\n');
         return '"' + string + '"';
     }
 
