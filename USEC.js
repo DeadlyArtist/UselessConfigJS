@@ -136,6 +136,7 @@ class USEC {
             const main = USEC._toString(object.node, { readable, enableVariables, indentLevel });
             if (!readable) return main;
 
+            const indent = USEC._getIndent(indentLevel, readable);
             const strParts = [];
 
             for (const el of object.before) {
