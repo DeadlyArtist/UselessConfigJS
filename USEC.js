@@ -29,13 +29,13 @@ class USEC {
         return this._getIndent(Math.max(0, indentLevel - 1), readable);
     }
 
-    static _string_toString(object, multiline = false) {
+    static _string_toString(object) {
         let string = object.replace(/\\/g, '\\\\')
             .replace(/"/g, '\\"')
             .replace(/\r/g, '\\r')
             .replace(/\t/g, '\\t');
-        if (!multiline) string = string.replace(/\n/g, '\\n');
-        return multiline ? ('"' + string + '"') : ('`' + string + '`');
+        string = string.replace(/\n/g, '\\n');
+        return '"' + string + '"';
     }
 
     static _toString(object, { readable = false, enableVariables = false, indentLevel = 0 } = {}) {
@@ -111,7 +111,7 @@ class USEC {
                 // Validate outputKey for identifier usage
                 const isIdentifier = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(outputKey);
                 if (!isIdentifier && declaration) throw new Error("Invalid variable key: " + outputKey);
-                const encodedKey = isIdentifier ? outputKey : `"${this._string_toString(outputKey)}"`;
+                const encodedKey = isIdentifier ? outputKey : this._string_toString(outputKey);
                 const prefix = declaration ? ':' : '';
 
                 return indent + prefix + encodedKey + space + '=' + space + value;
@@ -197,7 +197,11 @@ class USEC {
         }
 
         toUSECString(options) {
-            return USEC._string_toString(this, true);
+            let string = object.replace(/\\/g, '\\\\')
+                .replace(/"/g, '\\"')
+                .replace(/\r/g, '\\r')
+                .replace(/\t/g, '\\t');
+            return '`\n' + string + '\n`';
         }
     };
 
