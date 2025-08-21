@@ -582,32 +582,52 @@ class USEC {
         readNumber() {
             const start = this.index;
             const startCol = this.col;
-            let dotSeen = false;
-            let digitSeen = false;
 
-            if (this.current == "-") {
+            // Optional minus
+            if (this.current === '-') this.next();
+
+            // Integer part (no leading zero unless just '0')
+            if (this.current === '0') {
                 this.next();
+            } else if (this.current >= '1' && this.current <= '9') {
+                while (this.current >= '0' && this.current <= '9') {
+                    this.next();
+                }
+            } else {
+                this.error(`Expected digit`);
             }
 
-            while (!this.eof) {
-                const ch = this.current;
+            // Fractional part
+            if (this.current === '.') {
+                this.next();
+                if (!(this.current >= '0' && this.current <= '9')) {
+                    this.error("Expected digit after decimal point");
+                    return;
+                }
+                while (this.current >= '0' && this.current <= '9') {
+                    this.next();
+                }
+            }
 
-                if ((ch >= "0" && ch <= "9")) {
-                    digitSeen = true;
+            // Exponential part e|E[+/-]digits
+            if (this.current === 'e' || this.current === 'E') {
+                this.next();
+                if (this.current === '+' || this.current === '-') this.next();
+                if (!(this.current >= '0' && this.current <= '9')) {
+                    this.error("Expected digit after exponent");
+                    return;
+                }
+                while (this.current >= '0' && this.current <= '9') {
                     this.next();
-                } else if (ch === "." && !dotSeen) {
-                    dotSeen = true;
-                    this.next();
-                } else {
-                    break;
                 }
             }
 
             const raw = this.string.slice(start, this.index);
-            const num = parseFloat(raw);
+            const num = Number(raw);
 
-            if (!digitSeen || isNaN(num)) {
-                this.error(`Invalid number: '${raw}'`);
+            if (!Number.isFinite(num)) {
+                this.error(`Invalid number`);
+                return;
             }
 
             this.addToken(this.makeToken("number", num, startCol));
@@ -720,7 +740,7 @@ class USEC {
         parseDeclaration() {
             this.next();
             if (!this.expect("identifier") && this.check("newline")) {
-                if (this.check("newline")) return null;
+                return null;
             }
             let key = this.current.value;
             this.next();
@@ -738,7 +758,7 @@ class USEC {
         parseAssignment() {
             if (!this.check("identifier") && !this.check("string_start")) {
                 this.error(`Expected assignment or declaration`);
-                if (this.check("newline")) return null;
+                return null;
             }
             let key = this.check("identifier") ? this.current.value : this.parseString();
             this.next();
@@ -780,7 +800,7 @@ class USEC {
                     break;
                 case "char":
                     this.next();
-                    result = token.value;
+                    result = this.parseNumber();
                     break;
 
                 case "identifier":
@@ -849,6 +869,14 @@ class USEC {
             }
 
             return result;
+        }
+
+        parseNumber() {
+            const token = this.current;
+            this.next();
+
+            // Already parsed & validated in tokenizer
+            return token.value;
         }
 
         parseArray() {
