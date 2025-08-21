@@ -12,7 +12,7 @@ class USEC {
         let string = this._toString(object, { readable, enableVariables, indentLevel: 0 });
         parts.push(string);
         if (!readable) parts[0] = "%";
-        if (typeof string === 'object') parts[2] = string.value;
+        if (string && string[string.length - 1] === "?") parts[2] = string.slice(0, string.length - 1);
         else parts[1] = "!";
         return parts.join("");
     }
@@ -118,7 +118,7 @@ class USEC {
             }).filter(item => item !== null);
             if (body.length === 0) return '{}';
 
-            if (indentLevel == 0) return { value: body.join(newline) };
+            if (indentLevel == 0) return body.join(newline) + "?";
             return '{' + maybeNewline + body.join(newline) + maybeNewline + prevIndent + '}';
         }
 
