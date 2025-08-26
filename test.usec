@@ -9,6 +9,7 @@ array = [1, 2, "3", {
         path = "/root/home/weird directory()!? name$(version) with \" inline \\ \n escapes/$(version)/project" # $() for string interpolation
     }, object2 = {id = 24, version = version, path = "./main-tools/$(version)/project"}
 }]
+"weird +#_89() variable name" = 5
 
 %%
 super long

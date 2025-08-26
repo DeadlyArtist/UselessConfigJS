@@ -9,12 +9,16 @@ class USEC {
     static toString(object, { readable = false, enableVariables = false } = {}) {
         if (object === undefined) return (readable ? '' : '%') + "!";
         let parts = ["", ""];
-        let string = this._toString(object, { readable, enableVariables, indentLevel: 0 });
+        let string = this._toString(object, { readable, enableVariables, isFile: true, indentLevel: 0 });
         parts.push(string);
         if (!readable) parts[0] = "%";
         if (string && string[string.length - 1] === "?") parts[2] = string.slice(0, string.length - 1);
         else parts[1] = "!";
         return parts.join("");
+    }
+
+    static toValueString(object, { readable = false, enableVariables = false } = {}) {
+        return this._toString(object, { readable, enableVariables, isFile: false, indentLevel: 0 });
     }
 
     static equals(obj1, obj2) {
@@ -38,7 +42,7 @@ class USEC {
         return '"' + string + '"';
     }
 
-    static _toString(object, { readable = false, enableVariables = false, indentLevel = 0 } = {}) {
+    static _toString(object, { readable = false, enableVariables = false, isFile = false, indentLevel = 0 } = {}) {
         const indent = this._getIndent(indentLevel, readable);
         const prevIndent = this._getPrevIndent(indentLevel, readable);
         const newline = readable ? '\n' : ',';
@@ -68,11 +72,11 @@ class USEC {
         }
 
         if (object?.toUSECString) {
-            return (object.noIndent ? '' : indent) + object.toUSECString({ readable, enableVariables, indentLevel });
+            return (object.noIndent ? '' : indent) + object.toUSECString({ readable, enableVariables, isFile, indentLevel });
         }
 
         if (object?.toJSON) {
-            return USEC._toString(object.toJSON(), { readable, enableVariables, indentLevel });
+            return USEC._toString(object.toJSON(), { readable, enableVariables, isFile, indentLevel });
         }
 
         if (Array.isArray(object)) {
@@ -88,7 +92,10 @@ class USEC {
 
         if (typeof object === 'object') {
             const entries = Object.entries(object);
-            if (entries.length === 0) return '{}';
+            if (entries.length === 0) {
+                if (isFile) return "";
+                else return '{}';
+            }
 
             const body = entries.map(([key, value]) => {
                 value = USEC._toString(value, { readable, enableVariables, indentLevel: indentLevel + 1 });
@@ -116,9 +123,12 @@ class USEC {
 
                 return indent + prefix + encodedKey + space + '=' + space + value;
             }).filter(item => item !== null);
-            if (body.length === 0) return '{}';
+            if (body.length === 0) {
+                if (isFile) return "";
+                else return '{}';
+            }
 
-            if (indentLevel == 0) return body.join(newline) + "?";
+            if (isFile) return body.join(newline) + "?";
             return '{' + maybeNewline + body.join(newline) + maybeNewline + prevIndent + '}';
         }
 
@@ -904,9 +914,6 @@ class USEC {
         parseFile() {
             const obj = {};
 
-            if (this.check("newline")) {
-                this.next();
-            }
             while (!this.eof) {
                 const stmt = this.parseStatement();
                 if (this.debug) console.log(`[Node]`, stmt);
