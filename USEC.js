@@ -568,6 +568,11 @@ class USEC {
                 } else if (ch === "$" && this.peek() == "(") {
                     addStringPart();
                     this.readInterpolation();
+                } else if (ch === "\r") {
+                    this.next();
+                    if (this.current == "\n") this.next();
+                    if (this.current != "`") str += "\n";
+                    continue;
                 } else if (ch === "\n" && this.peek() === "`") {
                     // skip adding the last newline
                     this.next();
