@@ -44,7 +44,7 @@ class USEC {
 
     static _toString(object, { readable = false, enableVariables = false, isFile = false, indentLevel = 0 } = {}) {
         const indent = this._getIndent(indentLevel, readable);
-        const prevIndent = this._getPrevIndent(indentLevel, readable);
+        const nextIndent = this._getIndent(indentLevel + 1, readable);
         const newline = readable ? '\n' : ',';
         const maybeNewline = readable ? newline : "";
         const space = readable ? ' ' : '';
@@ -87,7 +87,7 @@ class USEC {
                 return indent + item;
             }).filter(item => item !== null);
             if (items.length === 0) return '[]';
-            return '[' + maybeNewline + items.join(newline) + maybeNewline + prevIndent + ']';
+            return '[' + maybeNewline + items.join(newline) + maybeNewline + indent + ']';
         }
 
         if (typeof object === 'object') {
@@ -121,7 +121,7 @@ class USEC {
                 const encodedKey = isIdentifier ? outputKey : this._string_toString(outputKey);
                 const prefix = declaration ? ':' : '';
 
-                return indent + prefix + encodedKey + space + '=' + space + value;
+                return nextIndent + prefix + encodedKey + space + '=' + space + value;
             }).filter(item => item !== null);
             if (body.length === 0) {
                 if (isFile) return "";
@@ -129,7 +129,7 @@ class USEC {
             }
 
             if (isFile) return body.join(newline) + "?";
-            return '{' + maybeNewline + body.join(newline) + maybeNewline + prevIndent + '}';
+            return '{' + maybeNewline + body.join(newline) + maybeNewline + indent + '}';
         }
 
         throw new Error(`Unsupported type: ${typeof object}`);
@@ -198,7 +198,7 @@ class USEC {
         }
 
         toUSECString(options) {
-            return `%%\n${this.value}\n%%`;
+            return `%%\n${this.value.replace(/%%/g, '%\\%')}\n%%`;
         }
     };
 
@@ -208,11 +208,25 @@ class USEC {
         }
 
         toUSECString(options) {
-            let string = object.replace(/\\/g, '\\\\')
+            let string = this.value.replace(/\\/g, '\\\\')
                 .replace(/"/g, '\\"')
                 .replace(/\r/g, '\\r')
                 .replace(/\t/g, '\\t');
             return '`\n' + string + '\n`';
+        }
+    };
+
+    static Char = class Char {
+        constructor(value = "") {
+            this.value = value;
+        }
+
+        toUSECString(options) {
+            let char = this.value[0].replace(/\\/g, '\\\\')
+                .replace(/'/g, '\\\'')
+                .replace(/\r/g, '\\r')
+                .replace(/\t/g, '\\t');
+            return `'${char}'`;
         }
     };
 
@@ -412,10 +426,10 @@ class USEC {
             } else if (ch === "\n") {
                 this.addNewline(ch);
                 this.next();
-            } else if (ch === "\r" && pk === "\n") {
-                this.addNewline(ch + pk);
+            } else if (ch === "\r") {
                 this.next();
-                this.next();
+                if (pk === "\n") this.next();
+                this.addNewline("\n");
             } else {
                 this.error(`Unexpected character '${ch}'`);
                 this.next();
@@ -436,6 +450,8 @@ class USEC {
                     this.next();
                     this.next();
                     break;
+                } else if (this.current === "\\") {
+                    this.next();
                 }
                 this.next();
             }
@@ -775,8 +791,11 @@ class USEC {
                 this.error(`Expected assignment or declaration`);
                 return null;
             }
-            let key = this.check("identifier") ? this.current.value : this.parseString();
-            this.next();
+            let key;
+            if (this.check("identifier")) {
+                key = this.current.value;
+                this.next();
+            } else key = this.parseString();
 
             if (!this.compact) if (this.cons_ret("space")) return null;
             if (this.cons_ret("equals")) return null;
@@ -806,16 +825,14 @@ class USEC {
                     break;
 
                 case "number":
-                    this.next();
-                    result = token.value;
+                    result = this.parseNumber();
                     break;
 
                 case "string_start":
                     result = this.parseString();
                     break;
                 case "char":
-                    this.next();
-                    result = this.parseNumber();
+                    result = this.parseChar();
                     break;
 
                 case "identifier":
@@ -884,6 +901,14 @@ class USEC {
             }
 
             return result;
+        }
+
+        parseChar() {
+            const token = this.current;
+            this.next();
+
+            // Already parsed & validated in tokenizer
+            return token.value;
         }
 
         parseNumber() {
